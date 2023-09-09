@@ -1681,7 +1681,7 @@ ACMD_FUNC(joblevelup)
 		sd->status.skill_point += level;
 		clif_misceffect(&sd->bl, 1);
 		for (uint32 i = sd->status.job_level - level; i <= sd->status.job_level; i++)
-			achievement_update_objective(sd, AG_GOAL_LEVEL, 1, i);
+			achievement_update_objective(sd, AG_GOAL_JOB_LEVEL, 1, i);
 		clif_displaymessage(fd, msg_txt(sd,24)); // Job level raised.
 	} else {
 		if (sd->status.job_level == 1) {

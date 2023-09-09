@@ -6809,6 +6809,7 @@
 	export_constant(AG_ENCHANT_SUCCESS);
 	export_constant(AG_SPEND_ZENY);
 	export_constant(AG_TAMING);
+	export_constant(AG_GOAL_JOB_LEVEL);
 
 	/* achievement info */
 	export_constant(ACHIEVEINFO_COUNT1);

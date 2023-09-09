@@ -1807,7 +1807,7 @@ Body:
   - Id: 200000
     Group: Goal_Level
     Name: Acquire the first aura!
-    Condition: " BaseLevel >= 99 "
+    Condition: " ARG0 == 99 "
     Rewards:
       Item: White_Slim_Pot_Box2
       Script: " specialeffect2 EF_BLESSING; sc_start SC_BLESSING,30000,10; "
@@ -1816,7 +1816,7 @@ Body:
   - Id: 200001
     Group: Goal_Level
     Name: Acquire the second aura!
-    Condition: " BaseLevel >= 150 "
+    Condition: " ARG0 == 150 "
     Dependents:
       200000: true
     Rewards:
@@ -1827,7 +1827,7 @@ Body:
   - Id: 200002
     Group: Goal_Level
     Name: Acquire the third aura!
-    Condition: " BaseLevel >= 175 "
+    Condition: " ARG0 == 175 "
     Dependents:
       200001: true
     Rewards:
@@ -1836,18 +1836,18 @@ Body:
       TitleId: 1002
     Score: 70
   - Id: 200003
-    Group: Goal_Level
+    Group: Goal_Job_Level
     Name: Master Job level!
-    Condition: " JobLevel >= 50 "
+    Condition: " ARG0 == 50 "
     Rewards:
       Item: Old_Violet_Box
       Script: " specialeffect2 EF_BLESSING; sc_start SC_BLESSING,30000,10; "
       TitleId: 1003
     Score: 30
   - Id: 200004
-    Group: Goal_Level
+    Group: Goal_Job_Level
     Name: Grandmaster Job level!
-    Condition: " JobLevel >= 70 "
+    Condition: " ARG0 == 70 "
     Dependents:
       200003: true
     Rewards:
@@ -2019,7 +2019,7 @@ Body:
   - Id: 200029
     Group: Goal_Status
     Name: Incarnation of Love and Hate
-    Condition: " BaseLevel == 99 && Class == JOB_NOVICE "
+    Condition: " ARG0 == 99 && Class == JOB_NOVICE "
     Rewards:
     #  Item: Abrasive_Box_10
       Script: " specialeffect2 EF_BLESSING; sc_start SC_BLESSING,30000,10; "
@@ -2027,7 +2027,7 @@ Body:
   - Id: 200030
     Group: Goal_Status
     Name: I really love it!
-    Condition: " BaseLevel == 99 && (Class >= JOB_SWORDMAN && Class <= JOB_THIEF) "
+    Condition: " ARG0 == 99 && (Class >= JOB_SWORDMAN && Class <= JOB_THIEF) "
     Rewards:
     #  Item: Bubble_Gum_Box_10
       Script: " specialeffect2 EF_BLESSING; sc_start SC_BLESSING,30000,10; "
@@ -2043,21 +2043,21 @@ Body:
   - Id: 200032
     Group: Goal_Level
     Name: The start of another adventure!
-    Condition: " BaseLevel == 100 "
+    Condition: " ARG0 == 100 "
     #Rewards:
     #  Item: Rebeginer_Box_100
     Score: 10
   - Id: 200033
     Group: Goal_Level
     Name: With a new mind!(1)
-    Condition: " BaseLevel == 170 && (Class >= JOB_RUNE_KNIGHT && Class <= JOB_GUILLOTINE_CROSS_T) "
+    Condition: " ARG0 == 170 && (Class >= JOB_RUNE_KNIGHT && Class <= JOB_GUILLOTINE_CROSS_T) "
     #Rewards:
     #  Item: Costume_Ticket
     Score: 50
   - Id: 200034
     Group: Goal_Level
     Name: With a new mind!(2)
-    Condition: " BaseLevel == 170 && (Class >= JOB_ROYAL_GUARD && Class <= JOB_SHADOW_CHASER_T) "
+    Condition: " ARG0 == 170 && (Class >= JOB_ROYAL_GUARD && Class <= JOB_SHADOW_CHASER_T) "
     #Rewards:
     #  Item: Costume_Ticket
     Score: 50

@@ -8170,7 +8170,7 @@ int pc_checkjoblevelup(map_session_data *sd)
 
 	npc_script_event(sd, NPCE_JOBLVUP);
 	for (; job_level <= sd->status.job_level; job_level++)
-		achievement_update_objective(sd, AG_GOAL_LEVEL, 1, job_level);
+		achievement_update_objective(sd, AG_GOAL_JOB_LEVEL, 1, job_level);
 
 	pc_show_questinfo(sd);
 	return 1;
