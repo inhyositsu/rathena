@@ -1633,10 +1633,6 @@ int32 status_damage(struct block_list *src,struct block_list *target,int64 dhp, 
 	}
 
 	if (sc && hp && status->hp) {
-		if (sc->getSCE(SC_AUTOBERSERK) &&
-			(!sc->getSCE(SC_PROVOKE) || !sc->getSCE(SC_PROVOKE)->val4) &&
-			status->hp < status->max_hp / 4)
-			sc_start4(src,target,SC_PROVOKE,100,10,0,0,1,0);
 		if (sc->getSCE(SC_BERSERK) && status->hp <= 100)
 			status_change_end(target, SC_BERSERK);
 		if( sc->getSCE(SC_RAISINGDRAGON) && status->hp <= 1000 )
@@ -1864,14 +1860,6 @@ int32 status_heal(struct block_list *bl,int64 hhp,int64 hsp, int64 hap, int32 fl
 	status->hp += hp;
 	status->sp += sp;
 	status->ap += ap;
-
-	if(hp && sc &&
-		sc->getSCE(SC_AUTOBERSERK) &&
-		sc->getSCE(SC_PROVOKE) &&
-		sc->getSCE(SC_PROVOKE)->val4==1 &&
-		status->hp >= status->max_hp / 4
-	)	// End auto berserk.
-		status_change_end(bl, SC_PROVOKE);
 
 	// Send HP update to client
 	switch(bl->type) {
@@ -10851,9 +10839,7 @@ static bool status_change_start_post_delay(block_list* src, block_list* bl, sc_t
 				tick = INFINITE_TICK;
 			break;
 		case SC_AUTOBERSERK:
-			if (status->hp < status->max_hp / 4 &&
-				(!sc->getSCE(SC_PROVOKE) || sc->getSCE(SC_PROVOKE)->val4==0))
-					sc_start4(src,bl,SC_PROVOKE,100,10,0,0,1,60000);
+			tick_time = 100; // Check to start/end provoke every interval
 			tick = INFINITE_TICK;
 			break;
 		case SC_SIGNUMCRUCIS:
@@ -11641,7 +11627,7 @@ static bool status_change_start_post_delay(block_list* src, block_list* bl, sc_t
 			val3 = 5*val1; // Def2 reduction
 			break;
 		case SC_PROVOKE:
-			if (src->type != BL_PC && val1 == 10) {
+			if (src != nullptr && src->type != BL_PC && val1 == 10) {
 				val2 = 0; // 0% Atk increase
 				val3 = 100; // 100% Def reduction
 			}
@@ -14119,7 +14105,6 @@ TIMER_FUNC(status_change_timer){
 	struct block_list *bl;
 	map_session_data *sd;
 	int32 interval = status_get_sc_interval(type);
-	bool dounlock = false;
 
 	bl = map_id2bl(id);
 	if(!bl) {
@@ -14152,6 +14137,8 @@ TIMER_FUNC(status_change_timer){
 		sce->timer = add_timer(t, status_change_timer, bl->id, data);
 	};
 	
+	FreeBlockLock freeLock(false);
+
 	switch(type) {
 	case SC_MAXIMIZEPOWER:
 	case SC_CLOAKING:
@@ -14204,12 +14191,20 @@ TIMER_FUNC(status_change_timer){
 		}
 		break;
 
-	case SC_PROVOKE:
-		if(sce->val4) { // Auto-provoke (it is ended in status_heal)
-			sc_timer_next(1000*60+tick);
-			return 0;
+	case SC_AUTOBERSERK:
+		if (sc->hasSCE(SC_PROVOKE) && sc->getSCE(SC_PROVOKE)->val4 == 1) {
+			// End infinite provoke granted by auto berserk
+			if (status->hp > status->max_hp / 4)
+				status_change_end(bl, SC_PROVOKE);
 		}
-		break;
+		else {
+			// Start infinite provoke granted by auto berserk
+			if (status->hp <= status->max_hp / 4)
+				sc_start4(bl, bl, SC_PROVOKE, 100, 10, 0, 0, 1, INFINITE_TICK);
+		}
+		// Repeat check every interval
+		sc_timer_next(100 + tick);
+		return 0;
 
 	case SC_STONE:
 		if (sce->val4 >= 0 && status->hp > status->max_hp / 4)
@@ -14234,8 +14229,7 @@ TIMER_FUNC(status_change_timer){
 			int64 damage = rnd() % 600 + 200;
 			if (!sd && damage >= status->hp)
 				damage = status->hp - 1; // No deadly damage for monsters
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 			status_zap(bl, damage, 0);
 		}
 		break;
@@ -14243,8 +14237,7 @@ TIMER_FUNC(status_change_timer){
 	case SC_BURNING:
 		if (sce->val4 >= 0) {
 			int64 damage = 1000 + (3 * status->max_hp) / 100; // Deals fixed (1000 + 3%*MaxHP)
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 			clif_damage(*bl, *bl, tick, 0, 1, damage, 1, DMG_NORMAL, 0, false);
 			status_fix_damage(bl, bl, damage, 1, 0);
 		}
@@ -14253,8 +14246,7 @@ TIMER_FUNC(status_change_timer){
 	case SC_TOXIN:
 		if (sce->val4 >= 0) { // Damage is every 10 seconds including 3%sp drain.
 			if (sce->val3 == 1) { // Target
-				map_freeblock_lock();
-				dounlock = true;
+				freeLock.lock();
 				clif_damage(*bl, *bl, tick, status->amotion, status->dmotion + 500, 1, 1, DMG_NORMAL, 0, false);
 				status_damage(bl, bl, 1, status->max_sp * 3 / 100, status->dmotion + 500, 0, 0);
 			} else { // Caster
@@ -14274,10 +14266,10 @@ TIMER_FUNC(status_change_timer){
 				damage = status->hp - 1; // Cannot Kill
 
 			if (damage > 0) { // 3% Damage each 4 seconds
-				map_freeblock_lock();
+				freeLock.lock();
 				status_zap(bl, damage, 0);
 				flag = !sc->getSCE(type); // Killed? Should not
-				map_freeblock_unlock();
+				freeLock.unlock();
 			}
 
 			if (!flag) { // Random Skill Cast
@@ -14313,8 +14305,7 @@ TIMER_FUNC(status_change_timer){
 		
 	case SC_PYREXIA:
 		if (sce->val4 >= 0) {
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 			clif_damage(*bl, *bl, tick, status->amotion, status->dmotion + 500, 100, 1, DMG_NORMAL, 0, false);
 			status_fix_damage(bl, bl, 100, status->dmotion + 500, 0);
 			unit_skillcastcancel(bl, 2);
@@ -14324,8 +14315,7 @@ TIMER_FUNC(status_change_timer){
 	case SC_LEECHESEND:
 		if (sce->val4 >= 0) {
 			int64 damage = status->vit * (sce->val1 - 3) + (int32)status->max_hp / 100; // {Target VIT x (New Poison Research Skill Level - 3)} + (Target HP/100)
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 			clif_damage(*bl, *bl, tick, status->amotion, status->dmotion + 500, damage, 1, DMG_NORMAL, 0, false);
 			status_fix_damage(bl, bl, damage, status->dmotion + 500, 0);
 			unit_skillcastcancel(bl, 2);
@@ -14768,10 +14758,9 @@ TIMER_FUNC(status_change_timer){
 
 			if (damage >= status->hp)
 				damage = status->hp - 1; // Do not kill, just keep you with 1 hp minimum
-			map_freeblock_lock();
+			freeLock.lock();
 			status_zap(bl, damage, 0);
 			sc_timer_next(975 + tick); // Tick is not 1000 to avoid desync with SC_OVERHEAT_LIMITPOINT.
-			map_freeblock_unlock();
 			return 0;
 		}
 		break;
@@ -14782,12 +14771,11 @@ TIMER_FUNC(status_change_timer){
 
 			if (!src || (src && (status_isdead(*src) || src->m != bl->m)))
 				break;
-			map_freeblock_lock();
+			freeLock.lock();
 			if (!status_charge(bl, 0, 50))
 				status_zap(bl, 0, status->sp);
 			if (sc->getSCE(type))
 				sc_timer_next(1000 + tick);
-			map_freeblock_unlock();
 			return 0;
 		}
 		break;
@@ -14866,13 +14854,12 @@ TIMER_FUNC(status_change_timer){
 			struct block_list *src = map_id2bl(sce->val3);
 			int32 damage = sce->val2;
 
-			map_freeblock_lock();
+			freeLock.lock();
 			clif_damage(*bl, *bl, tick, 0, 0, damage, 1, DMG_MULTI_HIT_ENDURE, 0, false);
 			status_damage(src, bl, damage,0, 0, 1, 0);
 			if( sc->getSCE(type) ) {
 				sc_timer_next(2000 + tick);
 			}
-			map_freeblock_unlock();
 			return 0;
 		}
 		break;
@@ -15103,12 +15090,11 @@ TIMER_FUNC(status_change_timer){
 
 			if( damage >= status->hp )
 				damage = status->hp - 1;
-			map_freeblock_lock();
+			freeLock.lock();
 			status_zap(bl,damage,0);
 			if( sc->getSCE(type) ) {
 				sc_timer_next(1000 + tick);
 			}
-			map_freeblock_unlock();
 			return 0;
 		}
 		break;
@@ -15142,8 +15128,7 @@ TIMER_FUNC(status_change_timer){
 				pc_addservantball( *sd, MAX_SERVANTBALL );
 			}
 			interval = max(500, skill_get_time2(DK_SERVANTWEAPON, sce->val1));
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 		}
 		break;
 	case SC_ABYSSFORCEWEAPON:
@@ -15152,8 +15137,7 @@ TIMER_FUNC(status_change_timer){
 				pc_addabyssball( *sd );
 			}
 			interval = max(500, skill_get_time2(ABC_FROM_THE_ABYSS, sce->val1));
-			map_freeblock_lock();
-			dounlock = true;
+			freeLock.lock();
 		}
 		break;
 	case SC_KILLING_AURA:
@@ -15214,13 +15198,8 @@ TIMER_FUNC(status_change_timer){
 	if(interval > 0 && sc->getSCE(type) && sce->val4 >= 100) {
 		sc_timer_next(min(sce->val4,interval)+tick);
 		sce->val4 -= interval;
-		if (dounlock)
-			map_freeblock_unlock();
 		return 0;
 	}
-
-	if (dounlock)
-		map_freeblock_unlock();
 
 	// Default for all non-handled control paths is to end the status
 	return status_change_end( bl,type,tid );
